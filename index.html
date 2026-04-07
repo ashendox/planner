@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>My Daily Planner 🍮</title>
+<title>Pompom Planner 🍮</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -595,7 +595,7 @@ function App() {
   const laid = layoutEvents(timedEvents);
   const progressPct = counts.total > 0 ? Math.round((counts.done/counts.total)*100) : 0;
   const greetings = ["Pompom's cheering for you!", "Let's have a great day!","You've got this!","One task at a time ~","Doing great so far!"];
-  const greeting = greetings[new Date().getSeconds() % greetings.length];
+  const greeting = greetings[new Date().getMinutes() % greetings.length];
 
   return (
     <div style={{ padding:"1.5rem 2rem 2.5rem", fontFamily:font, maxWidth:1200, margin:"0 auto", color:T.text, background:T.bg, minHeight:"100vh" }}>
