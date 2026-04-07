@@ -414,6 +414,15 @@ function App() {
     urgent: tasks.filter(tk => tk.priority === "urgent" && tk.status !== "done").length,
     carried: tasks.filter(tk => tk.carriedForward).length,
   };
+  const activeCount = counts.total - counts.done;
+
+  // Switch to "all" tab when no active tasks remain
+  useEffect(() => {
+    if (filter === "active" && counts.total > 0 && activeCount === 0) {
+      setFilter("all");
+    }
+  }, [activeCount, counts.total, filter]);
+
   const timedEvents = dayEvents.filter(e => e.start && !e.allDay);
   const allDayEvents = dayEvents.filter(e => e.allDay);
   const laid = layoutEvents(timedEvents);
