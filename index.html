@@ -91,45 +91,29 @@ const CALENDAR_CACHE_KEY = "planner-gcal-cache-v1";
 const CALENDAR_TOKEN_KEY = "planner-gcal-token-v1";
 
 // ========== JSONBIN CONFIG ==========
+// 1. Go to jsonbin.io and create a free account
+// 2. Click "Create a Bin", paste: {}  and name it "my-planner"
+// 3. Copy the Bin ID (from URL or dashboard) and paste below
+const JSONBIN_BIN_ID = "69d4ae3336566621a887c5f2";
 const JSONBIN_KEY_STORAGE = "planner-jsonbin-key";
-const JSONBIN_BIN_STORAGE = "planner-jsonbin-bin";
 
-function getJsonBinConfig() {
+function getJsonBinApiKey() {
   try {
-    const apiKey = localStorage.getItem(JSONBIN_KEY_STORAGE);
-    const binId = localStorage.getItem(JSONBIN_BIN_STORAGE);
-    return { apiKey, binId };
+    return localStorage.getItem(JSONBIN_KEY_STORAGE);
   } catch {}
-  return { apiKey: null, binId: null };
+  return null;
 }
 
-function setJsonBinConfig(apiKey, binId) {
+function setJsonBinApiKey(apiKey) {
   try {
-    if (apiKey) localStorage.setItem(JSONBIN_KEY_STORAGE, apiKey);
-    if (binId) localStorage.setItem(JSONBIN_BIN_STORAGE, binId);
+    localStorage.setItem(JSONBIN_KEY_STORAGE, apiKey);
   } catch {}
 }
 
-function clearJsonBinConfig() {
+function clearJsonBinApiKey() {
   try {
     localStorage.removeItem(JSONBIN_KEY_STORAGE);
-    localStorage.removeItem(JSONBIN_BIN_STORAGE);
   } catch {}
-}
-
-async function createJsonBin(apiKey, data) {
-  const response = await fetch("https://api.jsonbin.io/v3/b", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": apiKey,
-      "X-Bin-Name": "planner-tasks"
-    },
-    body: JSON.stringify(data)
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.message || "Failed to create bin");
-  return result.metadata.id;
 }
 
 async function readJsonBin(apiKey, binId) {
@@ -345,7 +329,7 @@ function App() {
   const [tokenClient, setTokenClient] = useState(null);
 
   // JSONBin state
-  const [jsonBinConfig, setJsonBinConfigState] = useState(() => getJsonBinConfig());
+  const [jsonBinApiKey, setJsonBinApiKeyState] = useState(() => getJsonBinApiKey());
   const [showSettings, setShowSettings] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -490,13 +474,18 @@ function App() {
     e.target.value = "";
   }
 
-  async function setupJsonBin() {
+  async function saveApiKey() {
     if (!apiKeyInput.trim()) return;
-    setSyncStatus("Setting up...");
+    if (!JSONBIN_BIN_ID) {
+      setSyncStatus("Error: Set JSONBIN_BIN_ID in code first");
+      return;
+    }
+    setSyncStatus("Verifying...");
     try {
-      const binId = await createJsonBin(apiKeyInput, allTasks);
-      setJsonBinConfig(apiKeyInput, binId);
-      setJsonBinConfigState({ apiKey: apiKeyInput, binId });
+      // Verify the API key works with the bin
+      await readJsonBin(apiKeyInput, JSONBIN_BIN_ID);
+      setJsonBinApiKey(apiKeyInput);
+      setJsonBinApiKeyState(apiKeyInput);
       setApiKeyInput("");
       setSyncStatus("Connected!");
       setTimeout(() => setSyncStatus(null), 2000);
@@ -506,11 +495,10 @@ function App() {
   }
 
   async function pushToCloud() {
-    const { apiKey, binId } = jsonBinConfig;
-    if (!apiKey || !binId) return;
+    if (!jsonBinApiKey || !JSONBIN_BIN_ID) return;
     setSyncStatus("Pushing...");
     try {
-      await updateJsonBin(apiKey, binId, allTasks);
+      await updateJsonBin(jsonBinApiKey, JSONBIN_BIN_ID, allTasks);
       setSyncStatus("Pushed!");
       setTimeout(() => setSyncStatus(null), 2000);
     } catch (err) {
@@ -519,11 +507,10 @@ function App() {
   }
 
   async function pullFromCloud() {
-    const { apiKey, binId } = jsonBinConfig;
-    if (!apiKey || !binId) return;
+    if (!jsonBinApiKey || !JSONBIN_BIN_ID) return;
     setSyncStatus("Pulling...");
     try {
-      const data = await readJsonBin(apiKey, binId);
+      const data = await readJsonBin(jsonBinApiKey, JSONBIN_BIN_ID);
       setAllTasks(data);
       setSyncStatus("Pulled!");
       setTimeout(() => setSyncStatus(null), 2000);
@@ -533,8 +520,8 @@ function App() {
   }
 
   function disconnectCloud() {
-    clearJsonBinConfig();
-    setJsonBinConfigState({ apiKey: null, binId: null });
+    clearJsonBinApiKey();
+    setJsonBinApiKeyState(null);
     setSyncStatus(null);
   }
 
@@ -623,7 +610,7 @@ function App() {
         </div>
         <div style={{ display:"flex", gap:4, alignItems:"center" }}>
           {syncStatus && <span style={{ fontSize:10, color:T.textTertiary, marginRight:4 }}>{syncStatus}</span>}
-          {jsonBinConfig.binId ? (
+          {jsonBinApiKey && JSONBIN_BIN_ID ? (
             <>
               <button onClick={pullFromCloud} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>↓ Pull</button>
               <button onClick={pushToCloud} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.greenSoft}`, background:T.greenPale, color:T.green, cursor:"pointer", fontFamily:font, fontWeight:600 }}>↑ Push</button>
@@ -636,28 +623,30 @@ function App() {
       {showSettings && (
         <div style={{ marginBottom:"1rem", background:T.cream, borderRadius:12, padding:"12px 16px", border:`1.5px solid ${T.border}` }}>
           <p style={{ fontSize:12, fontWeight:700, color:T.brown, margin:"0 0 8px" }}>Cloud Sync (JSONBin.io)</p>
-          {jsonBinConfig.binId ? (
+          {!JSONBIN_BIN_ID ? (
+            <p style={{ fontSize:11, color:"#C44040", margin:0 }}>
+              Set JSONBIN_BIN_ID in the code first.<br/>
+              <span style={{ color:T.textSecondary }}>Create a bin at jsonbin.io, then add the ID to index.html</span>
+            </p>
+          ) : jsonBinApiKey ? (
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <span style={{ fontSize:11, color:T.green, fontWeight:600 }}>✓ Connected</span>
-              <span style={{ fontSize:10, color:T.textTertiary }}>Bin: {jsonBinConfig.binId.slice(0,8)}...</span>
-              <button onClick={disconnectCloud} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font }}>Disconnect</button>
+              <button onClick={disconnectCloud} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font }}>Forget API Key</button>
             </div>
           ) : (
             <div>
               <p style={{ fontSize:11, color:T.textSecondary, margin:"0 0 8px" }}>
-                1. Go to <a href="https://jsonbin.io" target="_blank" style={{ color:T.brown }}>jsonbin.io</a> and create a free account<br/>
-                2. Copy your API key from the dashboard<br/>
-                3. Paste it below to enable cloud sync
+                Enter your JSONBin API key to enable sync:
               </p>
               <div style={{ display:"flex", gap:8 }}>
                 <input
                   type="password"
                   value={apiKeyInput}
                   onChange={e => setApiKeyInput(e.target.value)}
-                  placeholder="Paste your API key"
+                  placeholder="Paste API Key"
                   style={{ ...inputBase, flex:1, fontSize:12, padding:"6px 10px" }}
                 />
-                <button onClick={setupJsonBin} style={{ fontSize:11, padding:"6px 14px", borderRadius:8, border:"none", background:T.yellowDeep, color:T.brown, cursor:"pointer", fontFamily:font, fontWeight:700 }}>Connect</button>
+                <button onClick={saveApiKey} style={{ fontSize:11, padding:"6px 14px", borderRadius:8, border:"none", background:T.yellowDeep, color:T.brown, cursor:"pointer", fontFamily:font, fontWeight:700 }}>Save</button>
               </div>
             </div>
           )}
