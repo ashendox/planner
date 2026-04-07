@@ -90,6 +90,71 @@ const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 const CALENDAR_CACHE_KEY = "planner-gcal-cache-v1";
 const CALENDAR_TOKEN_KEY = "planner-gcal-token-v1";
 
+// ========== JSONBIN CONFIG ==========
+const JSONBIN_KEY_STORAGE = "planner-jsonbin-key";
+const JSONBIN_BIN_STORAGE = "planner-jsonbin-bin";
+
+function getJsonBinConfig() {
+  try {
+    const apiKey = localStorage.getItem(JSONBIN_KEY_STORAGE);
+    const binId = localStorage.getItem(JSONBIN_BIN_STORAGE);
+    return { apiKey, binId };
+  } catch {}
+  return { apiKey: null, binId: null };
+}
+
+function setJsonBinConfig(apiKey, binId) {
+  try {
+    if (apiKey) localStorage.setItem(JSONBIN_KEY_STORAGE, apiKey);
+    if (binId) localStorage.setItem(JSONBIN_BIN_STORAGE, binId);
+  } catch {}
+}
+
+function clearJsonBinConfig() {
+  try {
+    localStorage.removeItem(JSONBIN_KEY_STORAGE);
+    localStorage.removeItem(JSONBIN_BIN_STORAGE);
+  } catch {}
+}
+
+async function createJsonBin(apiKey, data) {
+  const response = await fetch("https://api.jsonbin.io/v3/b", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": apiKey,
+      "X-Bin-Private": "true",
+      "X-Bin-Name": "planner-tasks"
+    },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error("Failed to create bin");
+  const result = await response.json();
+  return result.metadata.id;
+}
+
+async function readJsonBin(apiKey, binId) {
+  const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+    headers: { "X-Master-Key": apiKey }
+  });
+  if (!response.ok) throw new Error("Failed to read bin");
+  const result = await response.json();
+  return result.record;
+}
+
+async function updateJsonBin(apiKey, binId, data) {
+  const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": apiKey
+    },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error("Failed to update bin");
+  return true;
+}
+
 function getCachedEvents() {
   try {
     const cached = localStorage.getItem(CALENDAR_CACHE_KEY);
@@ -279,6 +344,12 @@ function App() {
   const [lastSync, setLastSync] = useState(() => getCachedSyncTime());
   const [tokenClient, setTokenClient] = useState(null);
 
+  // JSONBin state
+  const [jsonBinConfig, setJsonBinConfigState] = useState(() => getJsonBinConfig());
+  const [showSettings, setShowSettings] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+
   const dayKey = toKey(currentDate);
   const tasks = allTasks[dayKey] || [];
   const isToday = dayKey === toKey(new Date());
@@ -419,6 +490,54 @@ function App() {
     e.target.value = "";
   }
 
+  async function setupJsonBin() {
+    if (!apiKeyInput.trim()) return;
+    setSyncStatus("Setting up...");
+    try {
+      const binId = await createJsonBin(apiKeyInput, allTasks);
+      setJsonBinConfig(apiKeyInput, binId);
+      setJsonBinConfigState({ apiKey: apiKeyInput, binId });
+      setApiKeyInput("");
+      setSyncStatus("Connected!");
+      setTimeout(() => setSyncStatus(null), 2000);
+    } catch (err) {
+      setSyncStatus("Error: " + err.message);
+    }
+  }
+
+  async function pushToCloud() {
+    const { apiKey, binId } = jsonBinConfig;
+    if (!apiKey || !binId) return;
+    setSyncStatus("Pushing...");
+    try {
+      await updateJsonBin(apiKey, binId, allTasks);
+      setSyncStatus("Pushed!");
+      setTimeout(() => setSyncStatus(null), 2000);
+    } catch (err) {
+      setSyncStatus("Error: " + err.message);
+    }
+  }
+
+  async function pullFromCloud() {
+    const { apiKey, binId } = jsonBinConfig;
+    if (!apiKey || !binId) return;
+    setSyncStatus("Pulling...");
+    try {
+      const data = await readJsonBin(apiKey, binId);
+      setAllTasks(data);
+      setSyncStatus("Pulled!");
+      setTimeout(() => setSyncStatus(null), 2000);
+    } catch (err) {
+      setSyncStatus("Error: " + err.message);
+    }
+  }
+
+  function disconnectCloud() {
+    clearJsonBinConfig();
+    setJsonBinConfigState({ apiKey: null, binId: null });
+    setSyncStatus(null);
+  }
+
   useEffect(() => { saveData(allTasks); }, [allTasks]);
 
   function setTasks(fn) {
@@ -502,14 +621,58 @@ function App() {
             <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}><Clover size={13}/>{greeting}<Clover size={13}/></span>
           </p>
         </div>
-        <div style={{ display:"flex", gap:4 }}>
-          <button onClick={exportTasks} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>Export</button>
-          <label style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>
-            Import
-            <input type="file" accept=".json" onChange={importTasks} style={{ display:"none" }} />
-          </label>
+        <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+          {syncStatus && <span style={{ fontSize:10, color:T.textTertiary, marginRight:4 }}>{syncStatus}</span>}
+          {jsonBinConfig.binId ? (
+            <>
+              <button onClick={pullFromCloud} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>↓ Pull</button>
+              <button onClick={pushToCloud} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.greenSoft}`, background:T.greenPale, color:T.green, cursor:"pointer", fontFamily:font, fontWeight:600 }}>↑ Push</button>
+            </>
+          ) : null}
+          <button onClick={() => setShowSettings(s => !s)} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:showSettings?T.cream:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>⚙</button>
         </div>
       </div>
+      {/* Settings Panel */}
+      {showSettings && (
+        <div style={{ marginBottom:"1rem", background:T.cream, borderRadius:12, padding:"12px 16px", border:`1.5px solid ${T.border}` }}>
+          <p style={{ fontSize:12, fontWeight:700, color:T.brown, margin:"0 0 8px" }}>Cloud Sync (JSONBin.io)</p>
+          {jsonBinConfig.binId ? (
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:11, color:T.green, fontWeight:600 }}>✓ Connected</span>
+              <span style={{ fontSize:10, color:T.textTertiary }}>Bin: {jsonBinConfig.binId.slice(0,8)}...</span>
+              <button onClick={disconnectCloud} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font }}>Disconnect</button>
+            </div>
+          ) : (
+            <div>
+              <p style={{ fontSize:11, color:T.textSecondary, margin:"0 0 8px" }}>
+                1. Go to <a href="https://jsonbin.io" target="_blank" style={{ color:T.brown }}>jsonbin.io</a> and create a free account<br/>
+                2. Copy your API key from the dashboard<br/>
+                3. Paste it below to enable cloud sync
+              </p>
+              <div style={{ display:"flex", gap:8 }}>
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={e => setApiKeyInput(e.target.value)}
+                  placeholder="Paste your API key"
+                  style={{ ...inputBase, flex:1, fontSize:12, padding:"6px 10px" }}
+                />
+                <button onClick={setupJsonBin} style={{ fontSize:11, padding:"6px 14px", borderRadius:8, border:"none", background:T.yellowDeep, color:T.brown, cursor:"pointer", fontFamily:font, fontWeight:700 }}>Connect</button>
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${T.borderSoft}` }}>
+            <p style={{ fontSize:11, color:T.textTertiary, margin:"0 0 6px" }}>Manual backup:</p>
+            <div style={{ display:"flex", gap:4 }}>
+              <button onClick={exportTasks} style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>Export JSON</button>
+              <label style={{ fontSize:10, padding:"4px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>
+                Import JSON
+                <input type="file" accept=".json" onChange={importTasks} style={{ display:"none" }} />
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Day Nav */}
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:"1.25rem", background:T.surfaceWarm, borderRadius:14, padding:"8px 10px", border:`1.5px solid ${T.border}` }}>
         <button onClick={() => setCurrentDate(d => addDays(d,-1))} style={{ ...btnBase, padding:"4px 10px", fontSize:18, color:T.brownLight, background:"transparent", border:"none" }}>‹</button>
