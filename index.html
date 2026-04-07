@@ -123,13 +123,12 @@ async function createJsonBin(apiKey, data) {
     headers: {
       "Content-Type": "application/json",
       "X-Master-Key": apiKey,
-      "X-Bin-Private": "true",
       "X-Bin-Name": "planner-tasks"
     },
     body: JSON.stringify(data)
   });
-  if (!response.ok) throw new Error("Failed to create bin");
   const result = await response.json();
+  if (!response.ok) throw new Error(result.message || "Failed to create bin");
   return result.metadata.id;
 }
 
@@ -137,8 +136,8 @@ async function readJsonBin(apiKey, binId) {
   const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
     headers: { "X-Master-Key": apiKey }
   });
-  if (!response.ok) throw new Error("Failed to read bin");
   const result = await response.json();
+  if (!response.ok) throw new Error(result.message || "Failed to read bin");
   return result.record;
 }
 
@@ -151,7 +150,8 @@ async function updateJsonBin(apiKey, binId, data) {
     },
     body: JSON.stringify(data)
   });
-  if (!response.ok) throw new Error("Failed to update bin");
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.message || "Failed to update bin");
   return true;
 }
 
