@@ -94,18 +94,28 @@ function getCachedEvents() {
   try {
     const cached = localStorage.getItem(CALENDAR_CACHE_KEY);
     if (cached) {
-      const { events, timestamp } = JSON.parse(cached);
-      // Cache valid for 5 minutes
-      if (Date.now() - timestamp < 5 * 60 * 1000) return events;
+      const { events } = JSON.parse(cached);
+      return events;
     }
   } catch {}
   return null;
 }
 
-function setCachedEvents(events) {
+function setCachedEvents(events, syncTime) {
   try {
-    localStorage.setItem(CALENDAR_CACHE_KEY, JSON.stringify({ events, timestamp: Date.now() }));
+    localStorage.setItem(CALENDAR_CACHE_KEY, JSON.stringify({ events, syncTime: syncTime || Date.now() }));
   } catch {}
+}
+
+function getCachedSyncTime() {
+  try {
+    const cached = localStorage.getItem(CALENDAR_CACHE_KEY);
+    if (cached) {
+      const { syncTime } = JSON.parse(cached);
+      return syncTime ? new Date(syncTime) : null;
+    }
+  } catch {}
+  return null;
 }
 
 function clearCalendarCache() {
@@ -114,7 +124,7 @@ function clearCalendarCache() {
 
 function getStoredToken() {
   try {
-    const stored = sessionStorage.getItem(CALENDAR_TOKEN_KEY);
+    const stored = localStorage.getItem(CALENDAR_TOKEN_KEY);
     if (stored) {
       const { token, expiry } = JSON.parse(stored);
       if (Date.now() < expiry) return token;
@@ -125,7 +135,7 @@ function getStoredToken() {
 
 function setStoredToken(token, expiresIn) {
   try {
-    sessionStorage.setItem(CALENDAR_TOKEN_KEY, JSON.stringify({
+    localStorage.setItem(CALENDAR_TOKEN_KEY, JSON.stringify({
       token,
       expiry: Date.now() + (expiresIn * 1000) - 60000 // 1 min buffer
     }));
@@ -133,7 +143,7 @@ function setStoredToken(token, expiresIn) {
 }
 
 function clearStoredToken() {
-  try { sessionStorage.removeItem(CALENDAR_TOKEN_KEY); } catch {}
+  try { localStorage.removeItem(CALENDAR_TOKEN_KEY); } catch {}
 }
 
 async function fetchGoogleCalendarEvents(accessToken, startDate, endDate) {
@@ -232,12 +242,15 @@ function App() {
   const [showDoneConfirm, setShowDoneConfirm] = useState(false);
   const [calCollapsed, setCalCollapsed] = useState(false);
 
-  // Google Calendar state
-  const [calEvents, setCalEvents] = useState({});
+  // Google Calendar state - load from cache on init
+  const [calEvents, setCalEvents] = useState(() => {
+    const cached = getCachedEvents();
+    return cached ? groupEventsByDate(cached) : {};
+  });
   const [calConnected, setCalConnected] = useState(() => !!getStoredToken());
   const [calLoading, setCalLoading] = useState(false);
   const [calError, setCalError] = useState(null);
-  const [lastSync, setLastSync] = useState(null);
+  const [lastSync, setLastSync] = useState(() => getCachedSyncTime());
   const [tokenClient, setTokenClient] = useState(null);
 
   const dayKey = toKey(currentDate);
@@ -292,31 +305,26 @@ function App() {
     }
   }, []);
 
-  // Fetch events when date changes (if connected)
+  // Load cached events (no auto-fetch - only manual refresh)
   useEffect(() => {
-    const token = getStoredToken();
-    if (token && calConnected) {
-      // Check if we need events for this date range
-      const cached = getCachedEvents();
-      if (cached) {
-        setCalEvents(groupEventsByDate(cached));
-      } else {
-        fetchEvents(token);
-      }
+    const cached = getCachedEvents();
+    if (cached) {
+      setCalEvents(groupEventsByDate(cached));
     }
-  }, [currentDate, calConnected]);
+  }, []);
 
   async function fetchEvents(accessToken) {
     setCalLoading(true);
     setCalError(null);
     try {
-      // Fetch 2 weeks of events centered around current date
-      const startDate = addDays(currentDate, -7);
-      const endDate = addDays(currentDate, 14);
+      // Fetch 4 weeks of events centered around current date
+      const startDate = addDays(currentDate, -14);
+      const endDate = addDays(currentDate, 21);
       const events = await fetchGoogleCalendarEvents(accessToken, startDate, endDate);
-      setCachedEvents(events);
+      const syncTime = Date.now();
+      setCachedEvents(events, syncTime);
       setCalEvents(groupEventsByDate(events));
-      setLastSync(new Date());
+      setLastSync(new Date(syncTime));
     } catch (err) {
       if (err.message === "AUTH_EXPIRED") {
         setCalConnected(false);
@@ -467,19 +475,21 @@ function App() {
             <span style={{ fontSize:11, color:T.textTertiary }}>{calCollapsed?"▸":"▾"}</span>
           </button>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {calConnected && lastSync && (
+            {lastSync && (
               <span style={{ fontSize:10, color:T.textLight, fontWeight:500 }}>
-                Synced {lastSync.toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })}
+                Synced {lastSync.toLocaleDateString([], { month:"short", day:"numeric" })} {lastSync.toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })}
               </span>
             )}
-            {calConnected ? (
+            {lastSync ? (
               <div style={{ display:"flex", gap:4 }}>
-                <button onClick={(e) => { e.stopPropagation(); refreshCalendar(); }} disabled={calLoading} style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:calLoading?"not-allowed":"pointer", fontFamily:font, fontWeight:600 }}>
-                  {calLoading ? "..." : "↻"}
+                <button onClick={(e) => { e.stopPropagation(); calConnected ? refreshCalendar() : connectCalendar(); }} disabled={calLoading} style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:calLoading?"not-allowed":"pointer", fontFamily:font, fontWeight:600 }}>
+                  {calLoading ? "..." : "↻ Sync"}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); disconnectCalendar(); }} style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>
-                  Disconnect
-                </button>
+                {calConnected && (
+                  <button onClick={(e) => { e.stopPropagation(); disconnectCalendar(); }} style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:`1px solid ${T.borderSoft}`, background:"transparent", color:T.textTertiary, cursor:"pointer", fontFamily:font, fontWeight:600 }}>
+                    Disconnect
+                  </button>
+                )}
               </div>
             ) : (
               <button onClick={(e) => { e.stopPropagation(); connectCalendar(); }} style={{ fontSize:11, padding:"4px 12px", borderRadius:8, border:`1.5px solid ${T.greenSoft}`, background:T.greenPale, color:T.green, cursor:"pointer", fontFamily:font, fontWeight:700 }}>
@@ -537,15 +547,15 @@ function App() {
           <div style={{ padding:"14px 16px", textAlign:"center" }}>
             {calError ? (
               <p style={{ margin:0, fontSize:12, color:"#C44040" }}>{calError}</p>
-            ) : !calConnected ? (
+            ) : calLoading ? (
+              <p style={{ margin:0, fontSize:12, color:T.textTertiary }}>Loading events...</p>
+            ) : !lastSync ? (
               <div>
                 <p style={{ margin:"0 0 8px", fontSize:12, color:T.textTertiary }}>Connect your Google Calendar to see events</p>
                 <button onClick={connectCalendar} style={{ fontSize:12, padding:"6px 16px", borderRadius:10, border:`1.5px solid ${T.greenSoft}`, background:T.greenPale, color:T.green, cursor:"pointer", fontFamily:font, fontWeight:700 }}>
                   Connect Google Calendar
                 </button>
               </div>
-            ) : calLoading ? (
-              <p style={{ margin:0, fontSize:12, color:T.textTertiary }}>Loading events...</p>
             ) : (
               <p style={{ margin:0, fontSize:12, color:T.textTertiary }}>No events today — more time for tasks! ✨</p>
             )}
