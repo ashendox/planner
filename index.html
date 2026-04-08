@@ -697,13 +697,13 @@ function App() {
       )}
       {/* Day Nav */}
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:"1.25rem", background:T.surfaceWarm, borderRadius:14, padding:"8px 10px", border:`1.5px solid ${T.border}` }}>
-        <button onClick={() => setCurrentDate(d => addDays(d,-1))} style={{ ...btnBase, padding:"4px 10px", fontSize:18, color:T.brownLight, background:"transparent", border:"none" }}>‹</button>
+        <button onClick={() => setCurrentDate(d => addDays(d,-1))} style={{ ...btnBase, padding:"0 12px", fontSize:34, lineHeight:1, height:34, display:"flex", alignItems:"center", justifyContent:"center", color:T.brownLight, background:"transparent", border:"none" }}>‹</button>
         <div style={{ flex:1, textAlign:"center" }}>
           <p style={{ fontSize:15, fontWeight:700, color:T.brown, margin:0 }}>{formatDay(currentDate)}</p>
           {isToday && <p style={{ fontSize:11, color:T.green, margin:"1px 0 0", fontWeight:600, display:"inline-flex", alignItems:"center", gap:4 }}><Clover size={12}/> today</p>}
         </div>
         {!isToday && <button onClick={() => setCurrentDate(new Date())} style={{ ...btnBase, fontSize:11, padding:"4px 10px", color:T.green, borderColor:T.greenSoft, background:T.greenPale, fontWeight:700, borderRadius:20 }}>Today</button>}
-        <button onClick={() => setCurrentDate(d => addDays(d,1))} style={{ ...btnBase, padding:"4px 10px", fontSize:18, color:T.brownLight, background:"transparent", border:"none" }}>›</button>
+        <button onClick={() => setCurrentDate(d => addDays(d,1))} style={{ ...btnBase, padding:"0 12px", fontSize:34, lineHeight:1, height:34, display:"flex", alignItems:"center", justifyContent:"center", color:T.brownLight, background:"transparent", border:"none" }}>›</button>
       </div>
       {/* Two Column Layout */}
       <div className="two-column">
