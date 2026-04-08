@@ -46,6 +46,7 @@ const PC = {
 };
 const STATUS = ["todo", "in progress", "done"];
 const DAY_START = 8, DAY_END = 19, PPM = 0.75;
+const WORK_START = 9, WORK_END = 17;
 const TOTAL_H = (DAY_END - DAY_START) * 60 * PPM;
 const HOURS = Array.from({ length: DAY_END - DAY_START }, (_, i) => DAY_START + i);
 
@@ -62,6 +63,13 @@ function formatDay(date) {
   if (key === toKey(addDays(new Date(), 1))) return "Tomorrow — " + label;
   if (key === toKey(addDays(new Date(), -1))) return "Yesterday — " + label;
   return label;
+}
+function fmtHrs(min) {
+  if (!min || min < 1) return "0h";
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  if (h === 0) return m + "m";
+  if (m === 0) return h + "h";
+  return h + "h" + m + "m";
 }
 function fmt12(dt) {
   const d = new Date(dt), h = d.getHours(), m = d.getMinutes();
@@ -593,6 +601,19 @@ function App() {
   const timedEvents = dayEvents.filter(e => e.start && !e.allDay);
   const allDayEvents = dayEvents.filter(e => e.allDay);
   const laid = layoutEvents(timedEvents);
+
+  // Time-based stats
+  const plannedMin = tasks.filter(tk => tk.status !== "done").reduce((s,tk) => s + (parseInt(tk.duration)||0), 0);
+  const loggedMin = tasks.filter(tk => tk.status === "done").reduce((s,tk) => s + (parseInt(tk.duration)||0), 0);
+  const meetingMin = timedEvents.filter(e => !e.declined).reduce((s,e) => {
+    const start = new Date(e.start), end = new Date(e.end);
+    const workStart = new Date(start); workStart.setHours(WORK_START, 0, 0, 0);
+    const workEnd = new Date(start); workEnd.setHours(WORK_END, 0, 0, 0);
+    const overlap = Math.min(end, workEnd) - Math.max(start, workStart);
+    return s + Math.max(0, overlap / 60000);
+  }, 0);
+  const workdayMin = (WORK_END - WORK_START) * 60;
+  const freeMin = Math.max(0, workdayMin - meetingMin - plannedMin);
   const progressPct = counts.total > 0 ? Math.round((counts.done/counts.total)*100) : 0;
   const greetings = ["Pompom's cheering for you!", "Let's have a great day!","You've got this!","One task at a time ~","Doing great so far!"];
   const greeting = greetings[new Date().getMinutes() % greetings.length];
@@ -785,33 +806,48 @@ function App() {
       </div>
       {/* Right Column - Tasks */}
       <div className="tasks-column">
-      {/* Progress */}
-      {counts.total > 0 && (
-        <div style={{ marginBottom:"1.25rem", background:T.cream, borderRadius:12, padding:"10px 14px", border:`1.5px solid ${T.border}` }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-            <span style={{ fontSize:12, color:T.textSecondary, fontWeight:600 }}>{counts.done === counts.total ? "🎉 All done!" : `${counts.done} of ${counts.total} done`}</span>
-            <span style={{ fontSize:12, color:T.brownLight, fontWeight:700 }}>{progressPct}%</span>
+      {/* Day at a glance */}
+      {(counts.total > 0 || meetingMin > 0) && (() => {
+        const meetingPct = Math.min(100, meetingMin/workdayMin*100);
+        const plannedPct = Math.min(100 - meetingPct, plannedMin/workdayMin*100);
+        const overcommit = plannedMin + meetingMin > workdayMin;
+        const workLabel = h => (h%12||12) + (h>=12?"p":"a");
+        return (
+          <div style={{ marginBottom:"1.25rem", background:T.cream, borderRadius:14, padding:"12px 16px", border:`1.5px solid ${T.border}` }}>
+            {/* Tasks line */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:counts.total>0?8:10, gap:8, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                <span style={{ fontSize:13, fontWeight:700, color:T.brown }}>
+                  {counts.total === 0 ? "No tasks yet" : counts.done === counts.total ? "🎉 All done!" : `${counts.done} of ${counts.total} done`}
+                </span>
+                {loggedMin > 0 && <span style={{ fontSize:11, color:T.textTertiary, fontWeight:600 }}>· {fmtHrs(loggedMin)} logged</span>}
+                {counts.urgent > 0 && <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:"#FFF0F0", color:"#C44040", border:"1px solid #F5A8A8", fontWeight:700 }}>🍄 {counts.urgent} urgent</span>}
+                {counts.carried > 0 && <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:T.surfaceWarm, color:"#A06B10", border:`1px solid ${T.border}`, fontWeight:700 }}>🐣 {counts.carried} carried</span>}
+              </div>
+              {counts.total > 0 && <span style={{ fontSize:12, color:T.brownLight, fontWeight:700 }}>{progressPct}%</span>}
+            </div>
+            {/* Task progress bar */}
+            {counts.total > 0 && (
+              <div style={{ height:6, background:T.yellowPale, borderRadius:10, overflow:"hidden", border:`1px solid ${T.borderSoft}`, marginBottom:14 }}>
+                <div style={{ height:"100%", width:progressPct+"%", background: progressPct===100 ? `linear-gradient(90deg,${T.green},#A5D66F)` : `linear-gradient(90deg,${T.yellow},${T.yellowDeep})`, borderRadius:10, transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)" }}/>
+              </div>
+            )}
+            {/* Workday allocation */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, fontSize:11, fontWeight:600, gap:8, flexWrap:"wrap" }}>
+              <span style={{ color:T.textSecondary }}>Workday {workLabel(WORK_START)}–{workLabel(WORK_END)}</span>
+              <span style={{ display:"flex", gap:10 }}>
+                <span style={{ color:"#4A72B0" }}>📅 {fmtHrs(meetingMin)}</span>
+                <span style={{ color:T.brown }}>⏱ {fmtHrs(plannedMin)}</span>
+                <span style={{ color:overcommit?"#C44040":T.greenDark }}>🌿 {fmtHrs(freeMin)}{overcommit?" over":" free"}</span>
+              </span>
+            </div>
+            <div style={{ height:10, borderRadius:10, overflow:"hidden", border:`1px solid ${T.borderSoft}`, display:"flex", background:overcommit?"#FFF0F0":T.greenPale }}>
+              {meetingPct > 0 && <div style={{ width:meetingPct+"%", background:"linear-gradient(90deg,#A8C4F0,#5B8AD4)" }} title={`Meetings: ${fmtHrs(meetingMin)}`}/>}
+              {plannedPct > 0 && <div style={{ width:plannedPct+"%", background:`linear-gradient(90deg,${T.yellow},${T.yellowDeep})` }} title={`Planned: ${fmtHrs(plannedMin)}`}/>}
+            </div>
           </div>
-          <div style={{ height:8, background:T.yellowPale, borderRadius:10, overflow:"hidden", border:`1px solid ${T.borderSoft}` }}>
-            <div style={{ height:"100%", width:progressPct+"%", background: progressPct===100 ? `linear-gradient(90deg,${T.green},#A5D66F)` : `linear-gradient(90deg,${T.yellow},${T.yellowDeep})`, borderRadius:10, transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)" }}/>
-          </div>
-        </div>
-      )}
-      {/* Stats */}
-      <div className="stats-grid">
-        {[
-          { label:"Total", val:counts.total, emoji:"🐾", color:T.brown },
-          { label:"Done", val:counts.done, emoji:"🍀", color:T.greenDark },
-          { label:"Urgent", val:counts.urgent, emoji:"🍄", color:counts.urgent>0?"#C44040":T.textLight },
-          { label:"Carried", val:counts.carried, emoji:"🐣", color:counts.carried>0?"#A06B10":T.textLight },
-        ].map(item => (
-          <div key={item.label} style={{ background:T.cream, borderRadius:12, padding:"10px", border:`1.5px solid ${T.borderSoft}`, textAlign:"center" }}>
-            <p style={{ fontSize:18, margin:"0 0 2px" }}>{item.emoji}</p>
-            <p style={{ fontSize:22, fontWeight:800, margin:0, color:item.color }}>{item.val}</p>
-            <p style={{ fontSize:10, color:T.textTertiary, margin:"2px 0 0", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.04em" }}>{item.label}</p>
-          </div>
-        ))}
-      </div>
+        );
+      })()}
       {/* Actions */}
       <div style={{ display:"flex", gap:8, marginBottom:"1rem", flexWrap:"wrap", alignItems:"center" }}>
         <button onClick={() => { setShowForm(f=>!f); setEditId(null); setForm(EF); }} style={{ ...btnBase, background:showForm&&!editId?"transparent":`linear-gradient(135deg,${T.yellow},${T.yellowDeep})`, color:showForm&&!editId?T.textSecondary:T.brown, border:showForm&&!editId?`1.5px solid ${T.border}`:"1.5px solid transparent", fontWeight:800, boxShadow:showForm&&!editId?"none":"0 2px 8px rgba(232,200,64,0.3)" }}>
