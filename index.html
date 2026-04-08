@@ -924,7 +924,7 @@ function App() {
           <p style={{ fontSize:16, fontWeight:800, margin:"0 0 6px", color:T.brown }}>Wrap up the day? 🌙</p>
           <p style={{ fontSize:13, color:T.textSecondary, margin:"0 0 14px", fontWeight:500 }}>{counts.total-counts.done} unfinished task{counts.total-counts.done!==1?"s":""} will hop over to tomorrow.</p>
           <div style={{ display:"flex", gap:8 }}>
-            <button onClick={finishDay} style={{ ...btnBase, background:`linear-gradient(135deg,${T.yellow},${T.yellowDeep})`, color:T.brown, border:"none", fontWeight:800 }}>Yes, carry forward ✨</button>
+            <button onClick={finishDay} style={{ ...btnBase, background:T.yellowSoft, color:T.brown, border:`1.5px solid ${T.yellowDeep}`, fontWeight:700, display:"inline-flex", alignItems:"center", gap:6 }}>Yes, carry forward <Clover size={14}/></button>
             <button onClick={() => setShowDoneConfirm(false)} style={{ ...btnBase, color:T.textSecondary }}>Nevermind</button>
           </div>
         </div>
