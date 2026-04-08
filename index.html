@@ -836,13 +836,13 @@ function App() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, fontSize:11, fontWeight:600, gap:8, flexWrap:"wrap" }}>
               <span style={{ color:T.textSecondary }}>Workday {workLabel(WORK_START)}–{workLabel(WORK_END)}</span>
               <span style={{ display:"flex", gap:10 }}>
-                <span style={{ color:"#4A72B0" }}>📅 {fmtHrs(meetingMin)}</span>
-                <span style={{ color:T.brown }}>⏱ {fmtHrs(plannedMin)}</span>
-                <span style={{ color:overcommit?"#C44040":T.greenDark }}>🌿 {fmtHrs(freeMin)}{overcommit?" over":" free"}</span>
+                <span style={{ color:T.brown }}>📅 {fmtHrs(meetingMin)}</span>
+                <span style={{ color:"#A06B10" }}>⏱ {fmtHrs(plannedMin)}</span>
+                <span style={{ color:overcommit?"#C44040":"#558B2F" }}>🌿 {fmtHrs(freeMin)}{overcommit?" over":" free"}</span>
               </span>
             </div>
-            <div style={{ height:10, borderRadius:10, overflow:"hidden", border:`1px solid ${T.borderSoft}`, display:"flex", background:overcommit?"#FFF0F0":T.greenPale }}>
-              {meetingPct > 0 && <div style={{ width:meetingPct+"%", background:"linear-gradient(90deg,#A8C4F0,#5B8AD4)" }} title={`Meetings: ${fmtHrs(meetingMin)}`}/>}
+            <div style={{ height:10, borderRadius:10, overflow:"hidden", border:`1px solid ${T.borderSoft}`, display:"flex", background:overcommit?"#FFF0F0":"#AED581" }}>
+              {meetingPct > 0 && <div style={{ width:meetingPct+"%", background:"linear-gradient(90deg,#BFA04D,#8B6914)" }} title={`Meetings: ${fmtHrs(meetingMin)}`}/>}
               {plannedPct > 0 && <div style={{ width:plannedPct+"%", background:`linear-gradient(90deg,${T.yellow},${T.yellowDeep})` }} title={`Planned: ${fmtHrs(plannedMin)}`}/>}
             </div>
           </div>
@@ -850,7 +850,7 @@ function App() {
       })()}
       {/* Actions */}
       <div style={{ display:"flex", gap:8, marginBottom:"1rem", flexWrap:"wrap", alignItems:"center" }}>
-        <button onClick={() => { setShowForm(f=>!f); setEditId(null); setForm(EF); }} style={{ ...btnBase, background:showForm&&!editId?"transparent":`linear-gradient(135deg,${T.yellow},${T.yellowDeep})`, color:showForm&&!editId?T.textSecondary:T.brown, border:showForm&&!editId?`1.5px solid ${T.border}`:"1.5px solid transparent", fontWeight:800, boxShadow:showForm&&!editId?"none":"0 2px 8px rgba(232,200,64,0.3)" }}>
+        <button onClick={() => { setShowForm(f=>!f); setEditId(null); setForm(EF); }} style={{ ...btnBase, background:showForm&&!editId?"transparent":T.yellowSoft, color:showForm&&!editId?T.textSecondary:T.brown, border:showForm&&!editId?`1.5px solid ${T.border}`:`1.5px solid ${T.yellowDeep}`, fontWeight:700 }}>
           {showForm&&!editId?"Cancel":"＋ Add task"}
         </button>
         {isToday && <button onClick={() => setShowDoneConfirm(true)} style={{ ...btnBase, color:T.green, borderColor:T.greenSoft, background:T.greenPale, fontWeight:700 }}>Done with today 🌟</button>}
