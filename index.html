@@ -469,12 +469,13 @@ function App() {
   }
 
   function exportTasks() {
-    const data = JSON.stringify(allTasks, null, 2);
+    const payload = { version: 2, tasks: allTasks, notes };
+    const data = JSON.stringify(payload, null, 2);
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `planner-tasks-${toKey(new Date())}.json`;
+    a.download = `planner-backup-${toKey(new Date())}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -486,7 +487,15 @@ function App() {
     reader.onload = (evt) => {
       try {
         const data = JSON.parse(evt.target.result);
-        setAllTasks(data);
+        if (!data || typeof data !== "object") throw new Error("Invalid shape");
+        if (data.version && data.tasks) {
+          // New envelope shape: load both tasks and notes
+          setAllTasks(data.tasks || {});
+          setNotes(data.notes || {});
+        } else {
+          // Old shape: flat tasks dict, preserve local notes
+          setAllTasks(data);
+        }
       } catch {
         alert("Invalid file format");
       }
@@ -519,7 +528,8 @@ function App() {
     if (!jsonBinApiKey || !JSONBIN_BIN_ID) return;
     setSyncStatus("Pushing...");
     try {
-      await updateJsonBin(jsonBinApiKey, JSONBIN_BIN_ID, allTasks);
+      const payload = { version: 2, tasks: allTasks, notes };
+      await updateJsonBin(jsonBinApiKey, JSONBIN_BIN_ID, payload);
       setSyncStatus("Pushed!");
       setTimeout(() => setSyncStatus(null), 2000);
     } catch (err) {
@@ -532,7 +542,16 @@ function App() {
     setSyncStatus("Pulling...");
     try {
       const data = await readJsonBin(jsonBinApiKey, JSONBIN_BIN_ID);
-      setAllTasks(data);
+      if (!data || typeof data !== "object") throw new Error("Unexpected data shape in bin");
+      if (data.version && data.tasks) {
+        // New envelope shape (v2+): load both tasks and notes
+        setAllTasks(data.tasks || {});
+        setNotes(data.notes || {});
+      } else {
+        // Old shape: bin is a flat tasks dict. Load tasks, preserve local notes
+        // until the next push migrates the bin to the new shape.
+        setAllTasks(data);
+      }
       setSyncStatus("Pulled!");
       setTimeout(() => setSyncStatus(null), 2000);
     } catch (err) {
