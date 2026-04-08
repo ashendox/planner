@@ -43,6 +43,7 @@ const PC = {
   high:   { bg: "#FFF5E0", text: "#A06B10", border: "#F2CC6B", dot: "#D4920A", emoji: "⭐" },
   medium: { bg: "#F0F5FF", text: "#4A72B0", border: "#A8C4F0", dot: "#5B8AD4", emoji: "🐟" },
   low:    { bg: "#F0FAF0", text: "#4A8A50", border: "#A8DCA8", dot: "#5BB05E", emoji: "🌱" },
+  none:   { bg: "#F0EEE6", text: "#7A7569", border: "#D4D0C2", dot: "#A5A095", emoji: "◌" },
 };
 const STATUS = ["todo", "in progress", "done"];
 const DAY_START = 8, DAY_END = 19, PPM = 0.75;
@@ -596,8 +597,10 @@ function App() {
   function convertActionToTask(evId, actionId) {
     const action = notes[evId]?.actions?.find(a => a.id === actionId);
     if (!action || action.taskId) return;
+    const ev = Object.values(calEvents).flat().find(e => e.id === evId);
+    const eventTitle = ev?.title || "Meeting";
     const newTaskId = genId();
-    setTasks(ts => [...ts, { id: newTaskId, text: action.text, priority: "medium", notes: "", duration: "", status: "todo", createdAt: Date.now(), carriedForward: false }]);
+    setTasks(ts => [{ id: newTaskId, text: action.text, priority: "none", notes: eventTitle, duration: "", status: "todo", createdAt: Date.now(), carriedForward: false }, ...ts]);
     setNotes(prev => {
       const cur = prev[evId];
       return { ...prev, [evId]: { ...cur, actions: cur.actions.map(a => a.id === actionId ? { ...a, taskId: newTaskId } : a) } };
@@ -630,7 +633,7 @@ function App() {
     setCurrentDate(addDays(currentDate, 1));
   }
 
-  const PO = { urgent:0, high:1, medium:2, low:3 };
+  const PO = { none:-1, urgent:0, high:1, medium:2, low:3 };
   const sorted = tasks
     .filter(tk => filter === "all" ? true : filter === "active" ? tk.status !== "done" : tk.status === "done")
     .slice().sort((a,b) => PO[a.priority] - PO[b.priority]);
