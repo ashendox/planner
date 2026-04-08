@@ -570,9 +570,6 @@ function App() {
     setForm({ text: tk.text, priority: tk.priority, notes: tk.notes||"", duration: tk.duration||"" });
     setEditId(tk.id); setShowForm(true);
   }
-  function toggleDone(id) {
-    setTasks(ts => ts.map(tk => tk.id !== id ? tk : { ...tk, status: tk.status === "done" ? "todo" : "done" }));
-  }
   function cycleStatus(id) {
     setTasks(ts => ts.map(tk => tk.id !== id ? tk : { ...tk, status: STATUS[(STATUS.indexOf(tk.status)+1)%STATUS.length] }));
   }
@@ -613,8 +610,8 @@ function App() {
       const tk = cur.find(t => t.id === id);
       if (!tk) return prev;
       const next = prev[nextKey] || [];
-      const moved = { ...tk, id: genId(), carriedForward: true, status: "todo", createdAt: Date.now() };
-      return { ...prev, [dayKey]: cur.filter(t => t.id !== id), [nextKey]: [moved, ...next] };
+      const moved = { ...tk, carriedForward: true, status: "todo" };
+      return { ...prev, [dayKey]: cur.filter(t => t.id !== id), [nextKey]: [moved, ...next.filter(nt => nt.id !== moved.id)] };
     });
   }
   function finishDay() {
@@ -624,10 +621,10 @@ function App() {
       const remaining = cur.filter(tk => tk.status !== "done");
       if (!remaining.length) return prev;
       const next = prev[nextKey] || [];
-      const carried = remaining.map(tk => ({ ...tk, id: genId(), carriedForward: true, status: "todo", createdAt: Date.now() }));
-      const merged = carried.concat(next.filter(nt => !carried.some(c => c.text === nt.text)));
-      const updatedToday = cur.map(tk => tk.status !== "done" ? { ...tk, status: "done" } : tk);
-      return { ...prev, [dayKey]: updatedToday, [nextKey]: merged };
+      const carried = remaining.map(tk => ({ ...tk, carriedForward: true, status: "todo" }));
+      const merged = carried.concat(next.filter(nt => !carried.some(c => c.id === nt.id || c.text === nt.text)));
+      const doneOnly = cur.filter(tk => tk.status === "done");
+      return { ...prev, [dayKey]: doneOnly, [nextKey]: merged };
     });
     setShowDoneConfirm(false);
     setCurrentDate(addDays(currentDate, 1));
@@ -964,16 +961,14 @@ function App() {
           return (
             <div key={tk.id} className="task-card" style={{ background:T.surface,border:`1.5px solid ${done?T.borderSoft:c.border}`,borderRadius:14,padding:"12px 14px",opacity:done?0.5:1,animation:`fadeIn 0.25s ease ${idx*0.03}s both` }}>
               <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
-                <button onClick={()=>toggleDone(tk.id)} style={{ marginTop:2,width:22,height:22,borderRadius:"50%",border:`2px solid ${c.dot}`,background:done?c.bg:tk.status==="in progress"?c.bg:"transparent",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                <button onClick={()=>cycleStatus(tk.id)} style={{ marginTop:2,width:22,height:22,borderRadius:"50%",border:`2px solid ${c.dot}`,background:done?c.bg:tk.status==="in progress"?`linear-gradient(90deg, ${c.dot} 50%, transparent 50%)`:"transparent",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
                   {done&&<span style={{ fontSize:10,color:c.text,fontWeight:800 }}>☘</span>}
-                  {tk.status==="in progress"&&<span style={{ width:8,height:8,borderRadius:"50%",background:c.dot }}/>}
                 </button>
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ margin:"0 0 4px",fontSize:14,fontWeight:700,color:T.text,textDecoration:done?"line-through":"none" }}>{tk.text}</p>
                   {tk.notes&&<p style={{ margin:"0 0 8px",fontSize:12,color:T.textSecondary,lineHeight:1.5,fontWeight:500 }}>{tk.notes}</p>}
                   <div style={{ display:"flex",gap:5,flexWrap:"wrap",alignItems:"center" }}>
                     <span style={{ fontSize:11,padding:"2px 10px",borderRadius:20,background:c.bg,color:c.text,border:`1px solid ${c.border}`,textTransform:"capitalize",fontWeight:700 }}>{c.emoji} {tk.priority}</span>
-                    <button onClick={()=>cycleStatus(tk.id)} style={{ fontSize:11,padding:"2px 10px",borderRadius:20,border:`1px solid ${T.border}`,background:T.cream,color:T.textSecondary,cursor:"pointer",textTransform:"capitalize",fontWeight:600,fontFamily:font }}>{tk.status}</button>
                     {tk.duration&&<span style={{ fontSize:11,padding:"2px 10px",borderRadius:20,background:T.cream,color:T.textSecondary,border:`1px solid ${T.borderSoft}`,fontWeight:600 }}>{tk.duration}m</span>}
                     {tk.carriedForward&&<span style={{ fontSize:11,padding:"2px 10px",borderRadius:20,background:T.surfaceWarm,color:T.brownLight,border:`1px solid ${T.border}`,fontWeight:600 }}>🐣 carried</span>}
                   </div>
